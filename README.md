@@ -72,14 +72,25 @@ This project implements a robust MLOps pipeline that automates data ingestion, m
 
 ---
 
-### 6. **Deployment Environment (Anthos Clusters)**
+### 6. **Infrastructure as Code (Terraform)**
 
-- **Tool**: Google Anthos (Kubernetes)
-- **Function**: Manages distributed hybrid cloud Kubernetes clusters.
+- **Tool**: [Terraform](https://www.terraform.io/)
+- **Function**: Provisions and manages cloud infrastructure declaratively.
+- **Responsibilities**:
+  - Defines cloud resources (EKS clusters, S3 buckets, IAM roles).
+  - Ensures reproducible infrastructure deployments.
+  - Manages infrastructure versioning and state.
+
+---
+
+### 7. **Cloud Deployment Environment (AWS/GCP)**
+
+- **Platform**: AWS EKS / Google GKE (Kubernetes)
+- **Function**: Manages scalable cloud Kubernetes clusters.
 - **Responsibilities**:
   - Hosts scalable inference APIs.
   - Facilitates A/B Testing and automated rollbacks.
-  - Routes traffic using built-in service mesh (e.g., Istio or similar).
+  - Routes traffic using cloud-native load balancers.
 
 ---
 
@@ -91,7 +102,8 @@ This project implements a robust MLOps pipeline that automates data ingestion, m
 | Model versioning                                 | MLflow + S3 + metadata tagging                   |
 | CI/CD pipeline setup                             | Jenkins + Docker + ArgoCD                        |
 | Reproducibility and traceability                 | MLflow experiment tracking                       |
-| Scalable deployment to production environment    | GitOps (ArgoCD) → Anthos Kubernetes Clusters     |
+| Scalable deployment to production environment    | GitOps (ArgoCD) → Cloud Kubernetes Clusters      |
+| Infrastructure as Code                           | Terraform                                        |
 | Automated rollback readiness (in progress)       | GitOps/CD + model version tagging via MLflow     |
 | Source control integration                       | GitHub                                           |
 
@@ -100,14 +112,17 @@ This project implements a robust MLOps pipeline that automates data ingestion, m
 ## 🔄 Flow Summary
 
 ```
-Data → [Airflow] → [MLflow] → [Jenkins] → [Docker] → [ArgoCD + GitHub] → [Anthos Clusters]
+Data → [Airflow] → [MLflow] → [Jenkins] → [Docker] → [ArgoCD + GitHub] → [Cloud K8s Clusters]
+                                                                                    ↑
+                                                                            [Terraform IaC]
 ```
 
+- **Terraform** provisions cloud infrastructure (EKS/GKE clusters, networking, storage).
 - **Airflow** triggers pipelines and fetches data from **S3**.
 - Processed data is used to train models with metrics tracked via **MLflow**.
 - **Jenkins** builds and tests Dockerized versions of the models.
 - Images are pushed to a **Docker Registry**.
-- **ArgoCD** detects changes and deploys the container to **Anthos Clusters**.
+- **ArgoCD** detects changes and deploys the container to **Cloud Kubernetes Clusters**.
 
 ---
 
@@ -132,6 +147,10 @@ ml_pipeline_project/
 ├── inference/
 │   ├── inference_api.py
 │   └── Dockerfile
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
 ├── scripts/
 │   ├── train.py
 │   ├── evaluate.py
