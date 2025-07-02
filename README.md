@@ -1,167 +1,187 @@
+# 🏠 House Price Predictor – An MLOps Learning Project
 
-# ML Project: Continuous Training, Versioning, and GitOps Deployment Pipeline
+Welcome to the **House Price Predictor** project! This is a real-world, end-to-end MLOps use case designed to help you master the art of building and operationalizing machine learning pipelines.
 
-## 📌 Project Overview
+You'll start from raw data and move through data preprocessing, feature engineering, experimentation, model tracking with MLflow, and optionally using Jupyter for exploration – all while applying industry-grade tooling.
 
-This project implements a robust MLOps pipeline that automates data ingestion, model training, versioning, containerization, and continuous deployment. It leverages CI/CD and GitOps practices to streamline the entire lifecycle of a machine learning model — from development to production — in a reproducible and scalable manner.
-
----
-
-## 🔧 Architecture Overview
-
-![Architecture Diagram](./MLOps-Projectt.drawio.png)
-> Replace the image above with the final exported PNG/JPG of your architecture diagram if different.
+> 🚀 **Want to master MLOps from scratch?**  
+Check out the [MLOps Bootcamp at School of DevOps](https://schoolofdevops.com) to level up your skills.
 
 ---
 
-## 🧩 Components & Workflow
-
-### 1. **Data Ingestion & Orchestration (Apache Airflow + S3)**
-
-- **Tool**: [Apache Airflow](https://airflow.apache.org/)
-- **Function**: Orchestrates the entire ML pipeline.
-- **Data Source**: AWS S3 serves as the source of raw and processed data.
-- **Responsibilities**:
-  - Schedules recurring training tasks.
-  - Validates and preprocesses data.
-  - Pushes metadata for tracking downstream.
-
----
-
-### 2. **Model Training & Versioning (MLflow)**
-
-- **Tool**: [MLflow](https://mlflow.org/)
-- **Function**: Tracks experiments and manages model versioning.
-- **Responsibilities**:
-  - Logs training metrics and parameters.
-  - Stores models with associated metadata (data hash, evaluation scores).
-  - Registers models for deployment and rollback.
-
----
-
-### 3. **CI/CD Integration (Jenkins Server)**
-
-- **Tool**: [Jenkins](https://www.jenkins.io/)
-- **Function**: Builds and automates CI pipelines.
-- **Responsibilities**:
-  - Pulls latest model and codebase.
-  - Builds Docker images for serving the model.
-  - Pushes image to Docker registry.
-  - Triggers ArgoCD (GitOps) for deployment.
-
----
-
-### 4. **Containerization (Docker)**
-
-- **Tool**: [Docker](https://www.docker.com/)
-- **Function**: Encapsulates the ML model and inference API into lightweight containers.
-- **Responsibilities**:
-  - Ensures portability and reproducibility.
-  - Version-controlled Docker images.
-
----
-
-### 5. **GitOps Continuous Delivery (ArgoCD + GitHub)**
-
-- **Tool**: [ArgoCD](https://argo-cd.readthedocs.io/)
-- **Function**: GitOps-based CD system to monitor GitHub for deployment changes.
-- **Responsibilities**:
-  - Deploys the latest containerized model to Kubernetes clusters (Anthos).
-  - Enables rollback to previous versions if performance degrades.
-  - Syncs Git repo with cluster state.
-
----
-
-### 6. **Infrastructure as Code (Terraform)**
-
-- **Tool**: [Terraform](https://www.terraform.io/)
-- **Function**: Provisions and manages cloud infrastructure declaratively.
-- **Responsibilities**:
-  - Defines cloud resources (EKS clusters, S3 buckets, IAM roles).
-  - Ensures reproducible infrastructure deployments.
-  - Manages infrastructure versioning and state.
-
----
-
-### 7. **Cloud Deployment Environment (AWS/GCP)**
-
-- **Platform**: AWS EKS / Google GKE (Kubernetes)
-- **Function**: Manages scalable cloud Kubernetes clusters.
-- **Responsibilities**:
-  - Hosts scalable inference APIs.
-  - Facilitates A/B Testing and automated rollbacks.
-  - Routes traffic using cloud-native load balancers.
-
----
-
-## ✅ Processes To be Implemented in Phase 2
-
-| Requirement                                      | Implemented Component                            |
-|--------------------------------------------------|--------------------------------------------------|
-| Automated model training                         | Airflow → MLflow → Jenkins                       |
-| Model versioning                                 | MLflow + S3 + metadata tagging                   |
-| CI/CD pipeline setup                             | Jenkins + Docker + ArgoCD                        |
-| Reproducibility and traceability                 | MLflow experiment tracking                       |
-| Scalable deployment to production environment    | GitOps (ArgoCD) → Cloud Kubernetes Clusters      |
-| Infrastructure as Code                           | Terraform                                        |
-| Automated rollback readiness (in progress)       | GitOps/CD + model version tagging via MLflow     |
-| Source control integration                       | GitHub                                           |
-
----
-
-## 🔄 Flow Summary
+## 📦 Project Structure
 
 ```
-Data → [Airflow] → [MLflow] → [Jenkins] → [Docker] → [ArgoCD + GitHub] → [Cloud K8s Clusters]
-                                                                                    ↑
-                                                                            [Terraform IaC]
-```
-
-- **Terraform** provisions cloud infrastructure (EKS/GKE clusters, networking, storage).
-- **Airflow** triggers pipelines and fetches data from **S3**.
-- Processed data is used to train models with metrics tracked via **MLflow**.
-- **Jenkins** builds and tests Dockerized versions of the models.
-- Images are pushed to a **Docker Registry**.
-- **ArgoCD** detects changes and deploys the container to **Cloud Kubernetes Clusters**.
-
----
-
-## 🚀 Next Steps (Phase 2+)
-
-- **Implement A/B Testing Infrastructure** using a service mesh or custom routing logic.
-- **Add rollback mechanisms** based on real-time performance thresholds.
-- **Integrate a scalable inference API** using FastAPI or Flask.
-- **Enhance monitoring** using Prometheus + Grafana or Sentry.
-
----
-
-## 📁 Suggested Project Structure
-
-```
-ml_pipeline_project/
-├── data/
-├── models/
-├── pipelines/
-│   ├── train_model_dag.py
-│   └── rollback.py
-├── inference/
-│   ├── inference_api.py
-│   └── Dockerfile
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-├── scripts/
-│   ├── train.py
-│   ├── evaluate.py
-│   ├── compare_ab.py
-│   └── track_experiments.py
-├── tests/
-├── configs/
-├── .github/workflows/
-├── README.md
-└── requirements.txt
+house-price-predictor/
+├── configs/                # YAML-based configuration for models
+├── data/                   # Raw and processed datasets
+├── deployment/
+│   └── mlflow/             # Docker Compose setup for MLflow
+├── models/                 # Trained models and preprocessors
+├── notebooks/              # Optional Jupyter notebooks for experimentation
+├── src/
+│   ├── data/               # Data cleaning and preprocessing scripts
+│   ├── features/           # Feature engineering pipeline
+│   ├── models/             # Model training and evaluation
+├── requirements.txt        # Python dependencies
+└── README.md               # You’re here!
 ```
 
 ---
 
+## 🛠️ Setting up Learning/Development Environment
+
+To begin, ensure the following tools are installed on your system:
+
+- [Python 3.11](https://www.python.org/downloads/)
+- [Git](https://git-scm.com/)
+- [Visual Studio Code](https://code.visualstudio.com/) or your preferred editor
+- [UV – Python package and environment manager](https://github.com/astral-sh/uv)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) **or** [Podman Desktop](https://podman-desktop.io/)
+
+---
+
+## 🚀 Preparing Your Environment
+
+1. **Fork this repo** on GitHub.
+
+2. **Clone your forked copy:**
+
+   ```bash
+   # Replace xxxxxx with your GitHub username or org
+   git clone https://github.com/xxxxxx/house-price-predictor.git
+   cd house-price-predictor
+   ```
+
+3. **Setup Python Virtual Environment using UV:**
+
+   ```bash
+   uv venv --python python3.11
+   source .venv/bin/activate
+   ```
+
+4. **Install dependencies:**
+
+   ```bash
+   uv pip install -r requirements.txt
+   ```
+
+---
+
+## 📊 Setup MLflow for Experiment Tracking
+
+To track experiments and model runs:
+
+```bash
+cd deployment/mlflow
+docker compose -f mlflow-docker-compose.yml up -d
+docker compose ps
+```
+
+> 🐧 **Using Podman?** Use this instead:
+
+```bash
+podman compose -f mlflow-docker-compose.yml up -d
+podman compose ps
+```
+
+Access the MLflow UI at [http://localhost:5555](http://localhost:5555)
+
+---
+
+## 📒 Using JupyterLab (Optional)
+
+If you prefer an interactive experience, launch JupyterLab with:
+
+```bash
+uv python -m jupyterlab
+# or
+python -m jupyterlab
+```
+
+---
+
+## 🔁 Model Workflow
+
+### 🧹 Step 1: Data Processing
+
+Clean and preprocess the raw housing dataset:
+
+```bash
+python src/data/run_processing.py   --input data/raw/house_data.csv   --output data/processed/cleaned_house_data.csv
+```
+
+---
+
+### 🧠 Step 2: Feature Engineering
+
+Apply transformations and generate features:
+
+```bash
+python src/features/engineer.py   --input data/processed/cleaned_house_data.csv   --output data/processed/featured_house_data.csv   --preprocessor models/trained/preprocessor.pkl
+```
+
+---
+
+### 📈 Step 3: Modeling & Experimentation
+
+Train your model and log everything to MLflow:
+
+```bash
+python src/models/train_model.py   --config configs/model_config.yaml   --data data/processed/featured_house_data.csv   --models-dir models   --mlflow-tracking-uri http://localhost:5555
+```
+
+---
+
+
+## Building FastAPI and Streamlit 
+
+The code for both the apps are available in `src/api` and `streamlit_app` already. To build and launch these apps 
+
+  * Add a  `Dockerfile` in the root of the source code for building FastAPI  
+  * Add `streamlit_app/Dockerfile` to package and build the Streamlit app  
+  * Add `docker-compose.yaml` in the root path to launch both these apps. be sure to provide `API_URL=http://fastapi:8000` in the streamlit app's environment. 
+
+
+Once you have launched both the apps, you should be able to access streamlit web ui and make predictions. 
+
+You could also test predictions with FastAPI directly using 
+
+```
+curl -X POST "http://localhost:8000/predict" \
+-H "Content-Type: application/json" \
+-d '{
+  "sqft": 1500,
+  "bedrooms": 3,
+  "bathrooms": 2,
+  "location": "suburban",
+  "year_built": 2000,
+  "condition": fair
+}'
+
+```
+
+Be sure to replace `http://localhost:8000/predict` with actual endpoint based on where its running. 
+
+
+## 🧠 Learn More About MLOps
+
+This project is part of the [**MLOps Bootcamp**](https://schoolofdevops.com) at School of DevOps, where you'll learn how to:
+
+- Build and track ML pipelines
+- Containerize and deploy models
+- Automate training workflows using GitHub Actions or Argo Workflows
+- Apply DevOps principles to Machine Learning systems
+
+🔗 [Get Started with MLOps →](https://schoolofdevops.com)
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions, issues, and suggestions to make this project even better. Feel free to fork, explore, and raise PRs!
+
+---
+
+Happy Learning!  
+— Team **School of DevOps**
