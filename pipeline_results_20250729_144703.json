@@ -1,0 +1,11 @@
+{
+  "start_time": "2025-07-29T14:46:53.261457",
+  "steps_completed": [
+    "data_processing",
+    "feature_engineering"
+  ],
+  "steps_failed": [
+    "model_training"
+  ],
+  "overall_success": false
+}

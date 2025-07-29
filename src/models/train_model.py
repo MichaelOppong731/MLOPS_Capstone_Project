@@ -117,7 +117,7 @@ def main(args):
             f"Features used: All features in the dataset except the target variable\n"
             f"Target variable: {target}\n"
             f"Trained on dataset: {args.data}\n"
-            f"Model saved at: {args.models_dir}/trained/{model_name}.pkl\n"
+            f"Model saved at: {args.models_dir}/{model_name}.pkl\n"
             f"Performance metrics:\n"
             f"  - MAE: {mae:.2f}\n"
             f"  - R²: {r2:.4f}"
@@ -130,7 +130,7 @@ def main(args):
         client.set_registered_model_tag(model_name, "features", "All features except target variable")
         client.set_registered_model_tag(model_name, "target_variable", target)
         client.set_registered_model_tag(model_name, "training_dataset", args.data)
-        client.set_registered_model_tag(model_name, "model_path", f"{args.models_dir}/trained/{model_name}.pkl")
+        client.set_registered_model_tag(model_name, "model_path", f"{args.models_dir}/{model_name}.pkl")
 
         # Add dependency tags
         deps = {
@@ -144,7 +144,9 @@ def main(args):
             client.set_registered_model_tag(model_name, k, v)
 
         # Save model locally
-        save_path = f"{args.models_dir}/trained/{model_name}.pkl"
+        import os
+        os.makedirs(args.models_dir, exist_ok=True)
+        save_path = f"{args.models_dir}/{model_name}.pkl"
         joblib.dump(model, save_path)
         logger.info(f"Saved trained model to: {save_path}")
         logger.info(f"Final MAE: {mae:.2f}, R²: {r2:.4f}")

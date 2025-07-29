@@ -1,0 +1,129 @@
+# ML Pipeline Configuration
+# This file contains settings for the automated ML pipeline
+
+# MLflow Configuration
+mlflow:
+  tracking_uri: "http://localhost:5555"
+  experiment_name: "house_price_pipeline"
+  model_name: "house_price_predictor"
+
+# Data Configuration
+data:
+  raw_data_path: "data/raw/house_data.csv"
+  processed_data_path: "data/processed/cleaned_house_data.csv"
+  featured_data_path: "data/processed/featured_house_data.csv"
+  validation_split: 0.2  # 20% for validation
+
+# Model Configuration
+model:
+  models_directory: "models/trained"
+  model_filename: "house_price_model.pkl"
+  preprocessor_filename: "preprocessor.pkl"
+
+# Validation Thresholds
+validation:
+  performance:
+    min_r2_score: 0.85
+    max_mae: 15000
+    max_rmse: 20000
+    max_mape: 0.15
+    min_samples: 100
+  
+  benchmarks:
+    max_prediction_time_ms: 100
+    min_throughput_samples_per_sec: 10
+  
+  robustness:
+    max_noise_tolerance: 0.1  # 10% performance degradation with noise
+    max_missing_tolerance: 0.15  # 15% performance degradation with missing values
+
+# Model Registry Configuration
+registry:
+  auto_promote_to_staging: true
+  auto_archive_old_versions: true
+  keep_latest_versions: 5
+  
+  promotion_rules:
+    staging_to_production:
+      min_r2_improvement: 0.01  # 1% improvement required
+      min_mae_improvement: 500   # 500 unit improvement required
+      require_manual_approval: true
+
+# Pipeline Execution
+execution:
+  max_retries: 3
+  retry_delay_seconds: 30
+  timeout_minutes: 60
+  
+  steps:
+    data_processing:
+      enabled: true
+      timeout_minutes: 10
+    
+    feature_engineering:
+      enabled: true
+      timeout_minutes: 15
+    
+    model_training:
+      enabled: true
+      timeout_minutes: 30
+    
+    model_validation:
+      enabled: true
+      timeout_minutes: 10
+      
+    model_registration:
+      enabled: true
+      timeout_minutes: 5
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "pipeline.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  mlflow_logging:
+    log_system_metrics: true
+    log_model_signature: true
+    log_input_example: true
+
+# Notification Configuration (for future use)
+notifications:
+  enabled: false
+  channels:
+    email:
+      enabled: false
+      recipients: []
+    
+    slack:
+      enabled: false
+      webhook_url: ""
+    
+    teams:
+      enabled: false
+      webhook_url: ""
+
+# Environment-specific overrides
+environments:
+  development:
+    mlflow:
+      tracking_uri: "http://localhost:5555"
+    validation:
+      performance:
+        min_r2_score: 0.80  # Relaxed for development
+  
+  staging:
+    mlflow:
+      tracking_uri: "http://mlflow-staging:5555"
+    validation:
+      performance:
+        min_r2_score: 0.85
+  
+  production:
+    mlflow:
+      tracking_uri: "http://mlflow-prod:5555"
+    validation:
+      performance:
+        min_r2_score: 0.90  # Stricter for production
+    registry:
+      require_manual_approval: true

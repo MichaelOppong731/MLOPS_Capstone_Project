@@ -72,6 +72,11 @@ def create_preprocessor():
 
 def run_feature_engineering(input_file, output_file, preprocessor_file):
     """Full feature engineering pipeline."""
+    # Create output directories if they don't exist
+    from pathlib import Path
+    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+    Path(preprocessor_file).parent.mkdir(parents=True, exist_ok=True)
+    
     # Load cleaned data
     logger.info(f"Loading data from {input_file}")
     df = pd.read_csv(input_file)

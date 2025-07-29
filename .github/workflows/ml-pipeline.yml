@@ -1,0 +1,273 @@
+name: ML Pipeline - Training & Deployment
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'configs/**'
+      - 'data/**'
+      - 'requirements.txt'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      force_retrain:
+        description: 'Force model retraining'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+  MLFLOW_TRACKING_URI: http://localhost:5555
+
+jobs:
+  data-validation:
+    runs-on: ubuntu-latest
+    outputs:
+      data-changed: ${{ steps.check-data.outputs.changed }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+    
+    - name: Check if data files changed
+      id: check-data
+      run: |
+        if git diff --name-only HEAD^ HEAD | grep -E "(data/|configs/)" || [ "${{ github.event.inputs.force_retrain }}" == "true" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Set up Python
+      if: steps.check-data.outputs.changed == 'true'
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      if: steps.check-data.outputs.changed == 'true'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Validate data integrity
+      if: steps.check-data.outputs.changed == 'true'
+      run: |
+        python -c "
+        import pandas as pd
+        import sys
+        
+        # Check if raw data exists and is valid
+        try:
+            data = pd.read_csv('data/raw/house_data.csv')
+            print(f'Raw data loaded: {len(data)} rows, {len(data.columns)} columns')
+            
+            # Basic data quality checks
+            if len(data) < 100:
+                print('ERROR: Insufficient data samples')
+                sys.exit(1)
+            
+            if data.isnull().sum().sum() > len(data) * 0.5:
+                print('ERROR: Too many missing values')
+                sys.exit(1)
+                
+            print('Data validation passed')
+        except Exception as e:
+            print(f'ERROR: Data validation failed: {e}')
+            sys.exit(1)
+        "
+
+  ml-pipeline:
+    needs: data-validation
+    if: needs.data-validation.outputs.data-changed == 'true'
+    runs-on: ubuntu-latest
+    
+    services:
+      mlflow:
+        image: python:3.11-slim
+        ports:
+          - 5555:5555
+        options: >-
+          --health-cmd "curl -f http://localhost:5555/health || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Start MLflow server
+      run: |
+        mlflow server --host 0.0.0.0 --port 5555 --default-artifact-root ./mlruns &
+        sleep 10
+        curl -f http://localhost:5555/health || exit 1
+    
+    - name: Create necessary directories
+      run: |
+        mkdir -p data/processed
+        mkdir -p models/trained
+        mkdir -p logs
+    
+    - name: Run ML Pipeline
+      id: pipeline
+      run: |
+        python src/pipeline/orchestrator.py \
+          --config configs/model_config.yaml \
+          --mlflow-uri http://localhost:5555 \
+          2>&1 | tee pipeline.log
+        
+        # Check if pipeline succeeded
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+          echo "pipeline_success=true" >> $GITHUB_OUTPUT
+        else
+          echo "pipeline_success=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+    
+    - name: Run Model Validation
+      if: steps.pipeline.outputs.pipeline_success == 'true'
+      run: |
+        python src/pipeline/validator.py \
+          --model models/trained/house_price_model.pkl \
+          --preprocessor models/trained/preprocessor.pkl \
+          --config configs/model_config.yaml \
+          --test-data data/processed/featured_house_data.csv \
+          2>&1 | tee validation.log
+    
+    - name: Upload Pipeline Logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: pipeline-logs
+        path: |
+          pipeline.log
+          validation.log
+          logs/
+    
+    - name: Upload Model Artifacts
+      if: steps.pipeline.outputs.pipeline_success == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: model-artifacts
+        path: |
+          models/trained/
+          configs/model_config.yaml
+    
+    - name: Test API Integration
+      if: steps.pipeline.outputs.pipeline_success == 'true'
+      run: |
+        # Start the API in background
+        cd src/api
+        python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+        API_PID=$!
+        sleep 10
+        
+        # Test health endpoint
+        curl -f http://localhost:8000/health || exit 1
+        
+        # Test prediction endpoint
+        curl -X POST "http://localhost:8000/predict" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "sqft": 1500,
+            "bedrooms": 3,
+            "bathrooms": 2,
+            "location": "suburban",
+            "year_built": 2000,
+            "condition": "fair"
+          }' || exit 1
+        
+        # Clean up
+        kill $API_PID
+
+  deploy-staging:
+    needs: ml-pipeline
+    if: success() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download model artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: model-artifacts
+        path: ./
+    
+    - name: Build Docker images
+      run: |
+        # Build FastAPI image
+        docker build -t house-price-api:latest .
+        
+        # Build Streamlit image
+        docker build -t house-price-ui:latest ./streamlit_app
+    
+    - name: Test Docker deployment
+      run: |
+        # Start services
+        docker-compose up -d
+        sleep 30
+        
+        # Test FastAPI
+        curl -f http://localhost:8000/health || exit 1
+        
+        # Test Streamlit (just check if it's running)
+        curl -f http://localhost:8501 || exit 1
+        
+        # Clean up
+        docker-compose down
+    
+    - name: Tag images for staging
+      run: |
+        docker tag house-price-api:latest house-price-api:staging-${{ github.sha }}
+        docker tag house-price-ui:latest house-price-ui:staging-${{ github.sha }}
+    
+    # Add your deployment steps here (e.g., push to registry, deploy to staging)
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        echo "API Image: house-price-api:staging-${{ github.sha }}"
+        echo "UI Image: house-price-ui:staging-${{ github.sha }}"
+        # Add actual deployment commands here
+
+  notify:
+    needs: [data-validation, ml-pipeline, deploy-staging]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Notify on success
+      if: needs.ml-pipeline.result == 'success'
+      run: |
+        echo "✅ ML Pipeline completed successfully!"
+        echo "Model trained and validated"
+        echo "Deployment to staging completed"
+    
+    - name: Notify on failure
+      if: needs.ml-pipeline.result == 'failure'
+      run: |
+        echo "❌ ML Pipeline failed!"
+        echo "Check the logs for details"
+        exit 1

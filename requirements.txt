@@ -40,3 +40,11 @@ setuptools==65.5.0
 ipykernel==6.29.5
 
 
+# ---------------------------------------------
+# 🔧 PIPELINE & AUTOMATION
+# ---------------------------------------------
+scipy==1.10.1           # Scientific computing library for statistical tests
+requests==2.31.0       # HTTP library for API calls and health checks
+streamlit==1.24.0      # Web app framework for ML dashboards
+plotly==5.14.1         # Interactive plotting library
+pydantic==1.10.8       # Data validation and settings management
