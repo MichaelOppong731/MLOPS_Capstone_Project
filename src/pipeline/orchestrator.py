@@ -24,7 +24,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 class MLPipelineOrchestrator:
     """Orchestrates the complete ML training pipeline"""
     
-    def __init__(self, config_path: str, mlflow_uri: str = "http://localhost:5555"):
+    def __init__(self, config_path: str, mlflow_uri: str = "databricks"):
         self.config_path = config_path
         self.mlflow_uri = mlflow_uri
         self.config = self._load_config()
@@ -57,9 +57,17 @@ class MLPipelineOrchestrator:
     
     def setup_mlflow(self):
         """Setup MLflow tracking"""
-        mlflow.set_tracking_uri(self.mlflow_uri)
-        mlflow.set_experiment("house_price_pipeline")
-        self.logger.info(f"MLflow tracking URI set to: {self.mlflow_uri}")
+        try:
+            mlflow.set_tracking_uri(self.mlflow_uri)
+            mlflow.set_experiment("house_price_pipeline")
+            self.logger.info(f"MLflow tracking URI set to: {self.mlflow_uri}")
+            
+            # Test connection for Databricks
+            if self.mlflow_uri == "databricks":
+                experiments = mlflow.search_experiments()
+                self.logger.info(f"Connected to Databricks MLflow. Found {len(experiments)} experiments")
+        except Exception as e:
+            self.logger.warning(f"MLflow setup issue: {e}")
     
     def run_data_processing(self) -> bool:
         """Execute data processing step"""
@@ -75,12 +83,10 @@ class MLPipelineOrchestrator:
             
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             self.logger.info("Data processing completed successfully")
-            self.logger.debug(f"Output: {result.stdout}")
             return True
             
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Data processing failed: {e}")
-            self.logger.error(f"Error output: {e.stderr}")
             return False
     
     def run_feature_engineering(self) -> bool:
@@ -98,12 +104,10 @@ class MLPipelineOrchestrator:
             
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             self.logger.info("Feature engineering completed successfully")
-            self.logger.debug(f"Output: {result.stdout}")
             return True
             
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Feature engineering failed: {e}")
-            self.logger.error(f"Error output: {e.stderr}")
             return False
     
     def run_model_training(self) -> bool:
@@ -122,12 +126,10 @@ class MLPipelineOrchestrator:
             
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             self.logger.info("Model training completed successfully")
-            self.logger.debug(f"Output: {result.stdout}")
             return True
             
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Model training failed: {e}")
-            self.logger.error(f"Error output: {e.stderr}")
             return False
     
     def validate_model(self) -> Dict[str, Any]:
@@ -208,7 +210,6 @@ class MLPipelineOrchestrator:
         try:
             model_name = "house_price_predictor"
             model_path = self.models_dir / "house_price_model.pkl"
-            preprocessor_path = self.models_dir / "preprocessor.pkl"
             
             with mlflow.start_run(run_name=f"pipeline_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
                 # Log model artifacts
@@ -217,9 +218,6 @@ class MLPipelineOrchestrator:
                     "model",
                     registered_model_name=model_name
                 )
-                
-                # Log preprocessor
-                mlflow.log_artifact(str(preprocessor_path), "preprocessor")
                 
                 # Log validation metrics
                 mlflow.log_metrics({
@@ -231,19 +229,8 @@ class MLPipelineOrchestrator:
                 # Log model config
                 mlflow.log_dict(self.config, "model_config.yaml")
                 
-                # Get the model version
-                client = mlflow.tracking.MlflowClient()
-                model_version = client.get_latest_versions(model_name, stages=["None"])[0]
-                
-                # Transition to Staging if validation passed
-                client.transition_model_version_stage(
-                    name=model_name,
-                    version=model_version.version,
-                    stage="Staging"
-                )
-                
-                self.logger.info(f"Model registered in MLflow as version {model_version.version}")
-                return model_version.version
+                self.logger.info(f"Model registered in MLflow")
+                return "latest"
                 
         except Exception as e:
             self.logger.error(f"Failed to register model in MLflow: {e}")
@@ -312,7 +299,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Run ML Pipeline")
     parser.add_argument("--config", required=True, help="Path to model config YAML")
-    parser.add_argument("--mlflow-uri", default="http://localhost:5555", help="MLflow tracking URI")
+    parser.add_argument("--mlflow-uri", default="databricks", help="MLflow tracking URI")
     
     args = parser.parse_args()
     
