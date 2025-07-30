@@ -262,14 +262,23 @@ class MLPipelineOrchestrator:
                 mlflow.log_dict(self.config, "model_config.yaml")
                 self.logger.info("📋 Logged model configuration")
                 
-                # Log model artifacts
+                # Log model artifacts (without registry registration)
                 model = joblib.load(model_path)
-                mlflow.sklearn.log_model(
-                    model,
-                    "model",
-                    registered_model_name=model_name
-                )
-                self.logger.info(f"🤖 Model logged and registered as: {model_name}")
+                try:
+                    mlflow.sklearn.log_model(
+                        model,
+                        "model",
+                        registered_model_name=model_name
+                    )
+                    self.logger.info(f"🤖 Model logged and registered as: {model_name}")
+                except Exception as registry_error:
+                    if "legacy workspace model registry is disabled" in str(registry_error):
+                        # Log model without registry registration
+                        mlflow.sklearn.log_model(model, "model")
+                        self.logger.info(f"🤖 Model logged to MLflow (registry disabled, using Unity Catalog)")
+                        self.logger.info(f"ℹ️  Model registry disabled - model saved to experiment only")
+                    else:
+                        raise registry_error
                 
                 # Get current experiment info
                 experiment = mlflow.get_experiment_by_name("/Users/michaeloppong731@gmail.com/house_price_pipeline")
