@@ -57,7 +57,20 @@ def main(args):
 
     if args.mlflow_tracking_uri:
         mlflow.set_tracking_uri(args.mlflow_tracking_uri)
-        mlflow.set_experiment(model_cfg['name'])
+        
+        # Use proper Databricks experiment path
+        if args.mlflow_tracking_uri == "databricks":
+            experiment_name = "/Users/michaeloppong731@gmail.com/house_price_pipeline"
+        else:
+            experiment_name = model_cfg['name']
+        
+        try:
+            mlflow.set_experiment(experiment_name)
+            logger.info(f"Using MLflow experiment: {experiment_name}")
+        except Exception as e:
+            logger.warning(f"MLflow experiment setup failed: {e}")
+            # Continue without MLflow if it fails
+            pass
 
     # Load data
     data = pd.read_csv(args.data)

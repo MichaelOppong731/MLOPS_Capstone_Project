@@ -70,8 +70,8 @@ class MLPipelineOrchestrator:
                 for exp in experiments[:5]:  # Show first 5 experiments
                     self.logger.info(f"📁 Existing experiment: {exp.name} (ID: {exp.experiment_id})")
             
-            # Set or create experiment
-            experiment_name = "house_price_pipeline"
+            # Set or create experiment with proper Databricks path
+            experiment_name = "/Users/michaeloppong731@gmail.com/house_price_pipeline"
             try:
                 experiment = mlflow.get_experiment_by_name(experiment_name)
                 if experiment:
@@ -272,7 +272,7 @@ class MLPipelineOrchestrator:
                 self.logger.info(f"🤖 Model logged and registered as: {model_name}")
                 
                 # Get current experiment info
-                experiment = mlflow.get_experiment_by_name("house_price_pipeline")
+                experiment = mlflow.get_experiment_by_name("/Users/michaeloppong731@gmail.com/house_price_pipeline")
                 if experiment:
                     self.logger.info(f"📁 Experiment ID: {experiment.experiment_id}")
                     self.logger.info(f"📁 Experiment Name: {experiment.name}")
