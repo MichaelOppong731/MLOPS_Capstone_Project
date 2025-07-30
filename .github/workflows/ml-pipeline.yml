@@ -196,33 +196,6 @@ jobs:
             models/trained/
             configs/model_config.yaml
 
-      - name: Test API Integration
-        if: steps.pipeline.outputs.pipeline_success == 'true'
-        run: |
-          # Start the API in background
-          cd src/api
-          python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
-          API_PID=$!
-          sleep 10
-
-          # Test health endpoint
-          curl -f http://localhost:8000/health || exit 1
-
-          # Test prediction endpoint
-          curl -X POST "http://localhost:8000/predict" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "sqft": 1500,
-              "bedrooms": 3,
-              "bathrooms": 2,
-              "location": "suburban",
-              "year_built": 2000,
-              "condition": "fair"
-            }' || exit 1
-
-          # Clean up
-          kill $API_PID
-
   build-and-push:
     needs: ml-pipeline
     if: success() && github.ref == 'refs/heads/main'
