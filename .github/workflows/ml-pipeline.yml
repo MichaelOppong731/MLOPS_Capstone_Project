@@ -110,8 +110,8 @@ jobs:
         run: |
           echo "Configuring Databricks MLflow connection..."
 
-          # Set up Databricks CLI configuration
-          mkdir -p ~/.databrickscfg
+          # Remove any existing .databrickscfg and create as file
+          rm -rf ~/.databrickscfg
           cat > ~/.databrickscfg << EOF
           [DEFAULT]
           host = $DATABRICKS_HOST
