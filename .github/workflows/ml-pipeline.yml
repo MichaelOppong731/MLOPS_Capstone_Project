@@ -1,22 +1,12 @@
-name: ML Pipeline - Training & Deployment
+name: ML Pipeline
 
 on:
   push:
     branches: [main, develop]
-    paths:
-      - "src/**"
-      - "configs/**"
-      - "data/**"
-      - "requirements.txt"
+    paths: ["src/**", "configs/**", "data/**", "requirements.txt"]
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      force_retrain:
-        description: "Force model retraining"
-        required: false
-        default: "false"
-        type: boolean
 
 env:
   PYTHON_VERSION: "3.11"
@@ -35,8 +25,7 @@ jobs:
       - name: Check if data files changed
         id: check-data
         run: |
-          # For testing, always run the pipeline
-          if git diff --name-only HEAD^ HEAD | grep -E "(data/|configs/|src/)" || [ "${{ github.event.inputs.force_retrain }}" == "true" ] || [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          if git diff --name-only HEAD^ HEAD | grep -E "(data/|configs/|src/)" || [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -60,24 +49,17 @@ jobs:
           python -c "
           import pandas as pd
           import sys
-
-          # Check if raw data exists and is valid
           try:
               data = pd.read_csv('data/raw/house_data.csv')
-              print(f'Raw data loaded: {len(data)} rows, {len(data.columns)} columns')
-              
-              # Basic data quality checks - adjusted for smaller dataset
-              if len(data) < 50:  # Reduced from 100 to 50
-                  print('ERROR: Insufficient data samples (minimum 50 required)')
+              if len(data) < 50:
+                  print('ERROR: Insufficient data samples')
                   sys.exit(1)
-              
-              if data.isnull().sum().sum() > len(data) * 0.7:  # Allow more missing values
-                  print('ERROR: Too many missing values (>70%)')
+              if data.isnull().sum().sum() > len(data) * 0.7:
+                  print('ERROR: Too many missing values')
                   sys.exit(1)
-                  
-              print(f'✅ Data validation passed: {len(data)} samples with {len(data.columns)} features')
+              print(f'Data validation passed: {len(data)} samples')
           except Exception as e:
-              print(f'ERROR: Data validation failed: {e}')
+              print(f'Data validation failed: {e}')
               sys.exit(1)
           "
 
@@ -102,15 +84,12 @@ jobs:
           # Ensure MLflow and Databricks packages are installed for CI
           pip install mlflow==2.3.1 databricks-cli==0.18.0 databricks-sdk==0.12.0
 
-      - name: Configure Databricks MLflow connection
+      - name: Configure Databricks MLflow
         env:
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
         run: |
-          echo "Configuring Databricks MLflow connection..."
-
-          # Remove any existing .databrickscfg and create as file
           rm -rf ~/.databrickscfg
           cat > ~/.databrickscfg << EOF
           [DEFAULT]
@@ -118,40 +97,14 @@ jobs:
           token = $DATABRICKS_TOKEN
           EOF
 
-          echo "✅ Databricks configuration created"
-
-      - name: Verify Databricks MLflow connection
-        env:
-          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
-        run: |
-          echo "Testing connection to Databricks MLflow at: $MLFLOW_TRACKING_URI"
-
-          # Test MLflow connection with Databricks authentication
           python -c "
           import mlflow
           import os
-
-          # Set environment variables for Databricks authentication
           os.environ['DATABRICKS_HOST'] = os.getenv('DATABRICKS_HOST')
           os.environ['DATABRICKS_TOKEN'] = os.getenv('DATABRICKS_TOKEN')
-
-          mlflow_uri = os.getenv('MLFLOW_TRACKING_URI')
-          if not mlflow_uri:
-              print('❌ MLFLOW_TRACKING_URI not set')
-              exit(1)
-
-          mlflow.set_tracking_uri(mlflow_uri)
-          try:
-              # Try to list experiments to test connection
-              experiments = mlflow.search_experiments()
-              print(f'✅ Successfully connected to Databricks MLflow at {mlflow_uri}')
-              print(f'Found {len(experiments)} experiments')
-          except Exception as e:
-              print(f'❌ Failed to connect to Databricks MLflow: {e}')
-              print('Check your DATABRICKS_HOST and DATABRICKS_TOKEN')
-              exit(1)
+          mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI'))
+          experiments = mlflow.search_experiments()
+          print(f'Connected to MLflow: {len(experiments)} experiments found')
           "
 
       - name: Create necessary directories
@@ -167,28 +120,9 @@ jobs:
         run: |
           python src/pipeline/orchestrator.py \
             --config configs/model_config.yaml \
-            --mlflow-uri "${MLFLOW_TRACKING_URI}" \
-            2>&1 | tee pipeline.log
-
-          # Check if pipeline succeeded
-          if [ ${PIPESTATUS[0]} -eq 0 ]; then
-            echo "pipeline_success=true" >> $GITHUB_OUTPUT
-          else
-            echo "pipeline_success=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-      - name: Upload Pipeline Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pipeline-logs
-          path: |
-            pipeline.log
-            logs/
+            --mlflow-uri "${MLFLOW_TRACKING_URI}"
 
       - name: Upload Model Artifacts
-        if: steps.pipeline.outputs.pipeline_success == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts
@@ -257,25 +191,12 @@ jobs:
     needs: [data-validation, ml-pipeline, build-and-push]
     if: always()
     runs-on: ubuntu-latest
-
     steps:
-      - name: Notify on success
-        if: needs.ml-pipeline.result == 'success' && needs.build-and-push.result == 'success'
+      - name: Pipeline Status
         run: |
-          echo "✅ ML Pipeline completed successfully!"
-          echo "Model trained and validated"
-          echo "Images built and pushed to ECR"
-
-      - name: Notify on pipeline failure
-        if: needs.ml-pipeline.result == 'failure'
-        run: |
-          echo "❌ ML Pipeline failed!"
-          echo "Check the logs for details"
-          exit 1
-
-      - name: Notify on build failure
-        if: needs.build-and-push.result == 'failure'
-        run: |
-          echo "❌ Image build/push failed!"
-          echo "Check the build logs for details"
-          exit 1
+          if [ "${{ needs.ml-pipeline.result }}" == "success" ] && [ "${{ needs.build-and-push.result }}" == "success" ]; then
+            echo "✅ Pipeline completed successfully"
+          else
+            echo "❌ Pipeline failed"
+            exit 1
+          fi

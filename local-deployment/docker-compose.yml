@@ -1,0 +1,50 @@
+# Docker Compose for running ECR images locally
+# This pulls your trained model images from private ECR and runs them locally
+
+version: "3.8"
+
+services:
+  api:
+    image: ${ECR_REGISTRY}/house-price-api:latest
+    container_name: house-price-api-local
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - MODEL_VERSION=LinearRegression
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - house-price-network
+
+  ui:
+    image: ${ECR_REGISTRY}/house-price-ui:latest
+    container_name: house-price-ui-local
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - house-price-network
+
+networks:
+  house-price-network:
+    driver: bridge
+    name: house-price-local

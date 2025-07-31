@@ -47,7 +47,7 @@ class MLPipelineOrchestrator:
         """Setup logging configuration"""
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            format='%(levelname)s: %(message)s',
             handlers=[
                 logging.FileHandler('pipeline.log'),
                 logging.StreamHandler()
@@ -58,44 +58,28 @@ class MLPipelineOrchestrator:
     def setup_mlflow(self):
         """Setup MLflow tracking"""
         try:
-            self.logger.info(f"🔧 Setting up MLflow with URI: {self.mlflow_uri}")
+            self.logger.info(f"Setting up MLflow: {self.mlflow_uri}")
             mlflow.set_tracking_uri(self.mlflow_uri)
             
-            # Test connection for Databricks
-            if self.mlflow_uri == "databricks":
-                experiments = mlflow.search_experiments()
-                self.logger.info(f"🔗 Connected to Databricks MLflow. Found {len(experiments)} experiments")
-                
-                # List existing experiments for debugging
-                for exp in experiments[:5]:  # Show first 5 experiments
-                    self.logger.info(f"📁 Existing experiment: {exp.name} (ID: {exp.experiment_id})")
-            
-            # Set or create experiment with proper Databricks path
+            # Set or create experiment
             experiment_name = "/Users/michaeloppong731@gmail.com/house_price_pipeline"
             try:
                 experiment = mlflow.get_experiment_by_name(experiment_name)
                 if experiment:
-                    self.logger.info(f"📁 Using existing experiment: {experiment_name} (ID: {experiment.experiment_id})")
                     mlflow.set_experiment(experiment_name)
                 else:
-                    self.logger.info(f"📁 Creating new experiment: {experiment_name}")
-                    experiment_id = mlflow.create_experiment(experiment_name)
-                    self.logger.info(f"📁 Created experiment with ID: {experiment_id}")
+                    mlflow.create_experiment(experiment_name)
                     mlflow.set_experiment(experiment_name)
-            except Exception as exp_error:
-                self.logger.error(f"❌ Error with experiment setup: {exp_error}")
-                # Fallback to default experiment
-                self.logger.info("🔄 Falling back to default experiment")
+            except Exception:
                 mlflow.set_experiment("Default")
                 
         except Exception as e:
-            self.logger.error(f"❌ MLflow setup failed: {e}")
-            import traceback
-            self.logger.error(f"Full error traceback: {traceback.format_exc()}")
+            self.logger.error(f"MLflow setup failed: {e}")
+            raise
     
     def run_data_processing(self) -> bool:
         """Execute data processing step"""
-        self.logger.info("Starting data processing...")
+        self.logger.info("Processing data...")
         
         try:
             cmd = [
@@ -105,8 +89,8 @@ class MLPipelineOrchestrator:
                 "--output", str(self.data_cleaned)
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            self.logger.info("Data processing completed successfully")
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+            self.logger.info("Data processing completed")
             return True
             
         except subprocess.CalledProcessError as e:
@@ -115,7 +99,7 @@ class MLPipelineOrchestrator:
     
     def run_feature_engineering(self) -> bool:
         """Execute feature engineering step"""
-        self.logger.info("Starting feature engineering...")
+        self.logger.info("Engineering features...")
         
         try:
             cmd = [
@@ -126,8 +110,8 @@ class MLPipelineOrchestrator:
                 "--preprocessor", str(self.models_dir / "preprocessor.pkl")
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            self.logger.info("Feature engineering completed successfully")
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+            self.logger.info("Feature engineering completed")
             return True
             
         except subprocess.CalledProcessError as e:
@@ -136,7 +120,7 @@ class MLPipelineOrchestrator:
     
     def run_model_training(self) -> bool:
         """Execute model training step"""
-        self.logger.info("Starting model training...")
+        self.logger.info("Training model...")
         
         try:
             cmd = [
@@ -148,8 +132,8 @@ class MLPipelineOrchestrator:
                 "--mlflow-tracking-uri", self.mlflow_uri
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            self.logger.info("Model training completed successfully")
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+            self.logger.info("Model training completed")
             return True
             
         except subprocess.CalledProcessError as e:
@@ -158,34 +142,25 @@ class MLPipelineOrchestrator:
     
     def validate_model(self) -> Dict[str, Any]:
         """Validate the trained model against quality thresholds"""
-        self.logger.info("Starting model validation...")
+        self.logger.info("Validating model...")
         
         try:
-            # Load the trained model and preprocessor
             model_path = self.models_dir / "house_price_model.pkl"
-            preprocessor_path = self.models_dir / "preprocessor.pkl"
-            
-            if not model_path.exists() or not preprocessor_path.exists():
-                raise FileNotFoundError("Model or preprocessor not found")
+            if not model_path.exists():
+                raise FileNotFoundError("Model not found")
             
             model = joblib.load(model_path)
-            preprocessor = joblib.load(preprocessor_path)
-            
-            # Load test data (using a portion of featured data for validation)
             data = pd.read_csv(self.data_featured)
             
-            # Split for validation (last 20% as validation set)
+            # Use last 20% for validation
             val_size = int(len(data) * 0.2)
             val_data = data.tail(val_size)
             
-            # Prepare features and target
             target_col = self.config.get('model', {}).get('target_variable', 'price')
             feature_cols = [col for col in val_data.columns if col != target_col]
             
             X_val = val_data[feature_cols]
             y_val = val_data[target_col]
-            
-            # Make predictions
             y_pred = model.predict(X_val)
             
             # Calculate metrics
@@ -193,33 +168,19 @@ class MLPipelineOrchestrator:
             r2 = r2_score(y_val, y_pred)
             rmse = np.sqrt(mean_squared_error(y_val, y_pred))
             
-            validation_results = {
+            # Quality thresholds
+            validation_passed = r2 >= 0.60 and mae <= 25000 and rmse <= 30000
+            
+            results = {
                 'mae': mae,
                 'r2_score': r2,
                 'rmse': rmse,
-                'validation_samples': len(val_data)
+                'validation_samples': len(val_data),
+                'validation_passed': validation_passed
             }
             
-            # Define quality thresholds - relaxed for small dataset
-            thresholds = {
-                'min_r2_score': 0.60,  # Minimum R² score - more realistic for 84 samples
-                'max_mae': 25000,      # Maximum MAE - more lenient
-                'max_rmse': 30000      # Maximum RMSE - more lenient
-            }
-            
-            # Check if model meets quality standards
-            validation_passed = (
-                r2 >= thresholds['min_r2_score'] and
-                mae <= thresholds['max_mae'] and
-                rmse <= thresholds['max_rmse']
-            )
-            
-            validation_results['validation_passed'] = validation_passed
-            validation_results['thresholds'] = thresholds
-            
-            self.logger.info(f"Model validation results: {validation_results}")
-            
-            return validation_results
+            self.logger.info(f"Validation: R²={r2:.3f}, MAE={mae:.0f}, RMSE={rmse:.0f}")
+            return results
             
         except Exception as e:
             self.logger.error(f"Model validation failed: {e}")
@@ -229,26 +190,20 @@ class MLPipelineOrchestrator:
         """Register the validated model in MLflow Model Registry"""
         if not validation_results.get('validation_passed', False):
             self.logger.warning("Model validation failed, skipping MLflow registration")
-            self.logger.warning(f"Validation results: {validation_results}")
             return None
         
-        self.logger.info("✅ Model validation passed! Starting MLflow registration...")
+        self.logger.info("Registering model in MLflow...")
         
         try:
             model_name = "house_price_predictor"
             model_path = self.models_dir / "house_price_model.pkl"
             
-            # Check if model file exists
             if not model_path.exists():
-                self.logger.error(f"Model file not found at: {model_path}")
+                self.logger.error("Model file not found")
                 return None
             
-            self.logger.info(f"📊 Starting MLflow run with tracking URI: {self.mlflow_uri}")
-            
             with mlflow.start_run(run_name=f"pipeline_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}") as run:
-                self.logger.info(f"🏃 MLflow run started: {run.info.run_id}")
-                
-                # Log validation metrics first
+                # Log metrics
                 metrics = {
                     'validation_mae': validation_results['mae'],
                     'validation_r2': validation_results['r2_score'],
@@ -256,105 +211,61 @@ class MLPipelineOrchestrator:
                     'validation_samples': validation_results['validation_samples']
                 }
                 mlflow.log_metrics(metrics)
-                self.logger.info(f"📈 Logged metrics: {metrics}")
-                
-                # Log model config
                 mlflow.log_dict(self.config, "model_config.yaml")
-                self.logger.info("📋 Logged model configuration")
                 
-                # Log model artifacts (without registry registration)
+                # Log model
                 model = joblib.load(model_path)
                 try:
-                    mlflow.sklearn.log_model(
-                        model,
-                        "model",
-                        registered_model_name=model_name
-                    )
-                    self.logger.info(f"🤖 Model logged and registered as: {model_name}")
+                    mlflow.sklearn.log_model(model, "model", registered_model_name=model_name)
+                    self.logger.info(f"Model registered as: {model_name}")
                 except Exception as registry_error:
                     if "legacy workspace model registry is disabled" in str(registry_error):
-                        # Log model without registry registration
                         mlflow.sklearn.log_model(model, "model")
-                        self.logger.info(f"🤖 Model logged to MLflow (registry disabled, using Unity Catalog)")
-                        self.logger.info(f"ℹ️  Model registry disabled - model saved to experiment only")
+                        self.logger.info("Model logged (registry disabled)")
                     else:
                         raise registry_error
                 
-                # Get current experiment info
-                experiment = mlflow.get_experiment_by_name("/Users/michaeloppong731@gmail.com/house_price_pipeline")
-                if experiment:
-                    self.logger.info(f"📁 Experiment ID: {experiment.experiment_id}")
-                    self.logger.info(f"📁 Experiment Name: {experiment.name}")
-                else:
-                    self.logger.warning("⚠️ Could not find experiment info")
-                
-                self.logger.info(f"✅ MLflow registration completed successfully!")
-                self.logger.info(f"🔗 Run ID: {run.info.run_id}")
-                
+                self.logger.info("MLflow registration completed")
                 return run.info.run_id
                 
         except Exception as e:
-            self.logger.error(f"❌ Failed to register model in MLflow: {e}")
-            import traceback
-            self.logger.error(f"Full error traceback: {traceback.format_exc()}")
+            self.logger.error(f"Failed to register model in MLflow: {e}")
             return None
     
     def run_full_pipeline(self) -> Dict[str, Any]:
         """Execute the complete ML pipeline"""
-        self.logger.info("Starting full ML pipeline execution...")
+        self.logger.info("Starting ML pipeline...")
         
-        pipeline_results = {
-            'start_time': datetime.now().isoformat(),
-            'steps_completed': [],
-            'steps_failed': [],
-            'overall_success': False
-        }
+        steps = [
+            ("Data Processing", self.run_data_processing),
+            ("Feature Engineering", self.run_feature_engineering),
+            ("Model Training", self.run_model_training),
+        ]
         
-        # Step 1: Data Processing
-        if self.run_data_processing():
-            pipeline_results['steps_completed'].append('data_processing')
-        else:
-            pipeline_results['steps_failed'].append('data_processing')
-            return pipeline_results
+        # Execute pipeline steps
+        for step_name, step_func in steps:
+            if not step_func():
+                self.logger.error(f"{step_name} failed")
+                return {'overall_success': False, 'failed_step': step_name}
         
-        # Step 2: Feature Engineering
-        if self.run_feature_engineering():
-            pipeline_results['steps_completed'].append('feature_engineering')
-        else:
-            pipeline_results['steps_failed'].append('feature_engineering')
-            return pipeline_results
-        
-        # Step 3: Model Training
-        if self.run_model_training():
-            pipeline_results['steps_completed'].append('model_training')
-        else:
-            pipeline_results['steps_failed'].append('model_training')
-            return pipeline_results
-        
-        # Step 4: Model Validation
+        # Validate model
         validation_results = self.validate_model()
-        if validation_results.get('validation_passed', False):
-            pipeline_results['steps_completed'].append('model_validation')
-            pipeline_results['validation_results'] = validation_results
-        else:
-            pipeline_results['steps_failed'].append('model_validation')
-            pipeline_results['validation_results'] = validation_results
-            return pipeline_results
+        if not validation_results.get('validation_passed', False):
+            self.logger.error("Model validation failed")
+            return {'overall_success': False, 'failed_step': 'validation', 'validation_results': validation_results}
         
-        # Step 5: Model Registration
+        # Register model
         model_version = self.register_model_in_mlflow(validation_results)
-        if model_version:
-            pipeline_results['steps_completed'].append('model_registration')
-            pipeline_results['model_version'] = model_version
-        else:
-            pipeline_results['steps_failed'].append('model_registration')
-            return pipeline_results
+        if not model_version:
+            self.logger.error("Model registration failed")
+            return {'overall_success': False, 'failed_step': 'registration'}
         
-        pipeline_results['overall_success'] = True
-        pipeline_results['end_time'] = datetime.now().isoformat()
-        
-        self.logger.info("Full ML pipeline completed successfully!")
-        return pipeline_results
+        self.logger.info("ML pipeline completed successfully!")
+        return {
+            'overall_success': True,
+            'validation_results': validation_results,
+            'model_version': model_version
+        }
 
 
 if __name__ == "__main__":
