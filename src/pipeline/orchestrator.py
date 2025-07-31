@@ -284,7 +284,12 @@ if __name__ == "__main__":
     print("PIPELINE EXECUTION SUMMARY")
     print("="*50)
     print(f"Overall Success: {results['overall_success']}")
-    print(f"Steps Completed: {', '.join(results['steps_completed'])}")
-    if results['steps_failed']:
-        print(f"Steps Failed: {', '.join(results['steps_failed'])}")
+    
+    if results['overall_success']:
+        validation = results.get('validation_results', {})
+        print(f"Model R² Score: {validation.get('r2_score', 'N/A'):.3f}")
+        print(f"Model Version: {results.get('model_version', 'N/A')}")
+    else:
+        print(f"Failed Step: {results.get('failed_step', 'Unknown')}")
+    
     print("="*50)
