@@ -187,16 +187,114 @@ jobs:
 
           echo "UI image pushed: $ECR_REGISTRY/$ECR_REPOSITORY_UI:$IMAGE_TAG"
 
+  deploy-to-ecs:
+    needs: build-and-push
+    if: success() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - name: Force ECS service deployment
+        env:
+          CLUSTER_NAME: ${{ vars.ECS_CLUSTER_NAME || 'ml-cluster' }}
+          API_SERVICE_NAME: ${{ vars.ECS_API_SERVICE_NAME || 'inference-api' }}
+          UI_SERVICE_NAME: ${{ vars.ECS_UI_SERVICE_NAME || 'ui' }}
+        run: |
+          echo "🚀 Forcing ECS service deployments to pull latest images..."
+
+          # Force new deployment for API service
+          echo "📦 Updating API service: $API_SERVICE_NAME"
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $API_SERVICE_NAME \
+            --force-new-deployment \
+            --no-cli-pager
+
+          # Force new deployment for UI service
+          echo "🎨 Updating UI service: $UI_SERVICE_NAME"
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $UI_SERVICE_NAME \
+            --force-new-deployment \
+            --no-cli-pager
+
+          echo "✅ ECS deployment updates initiated"
+
+      - name: Wait for deployments to stabilize
+        env:
+          CLUSTER_NAME: ${{ vars.ECS_CLUSTER_NAME || 'ml-cluster' }}
+          API_SERVICE_NAME: ${{ vars.ECS_API_SERVICE_NAME || 'inference-api' }}
+          UI_SERVICE_NAME: ${{ vars.ECS_UI_SERVICE_NAME || 'ui' }}
+        run: |
+          echo "⏳ Waiting for API service deployment to stabilize..."
+          aws ecs wait services-stable \
+            --cluster $CLUSTER_NAME \
+            --services $API_SERVICE_NAME \
+            --no-cli-pager
+
+          echo "⏳ Waiting for UI service deployment to stabilize..."
+          aws ecs wait services-stable \
+            --cluster $CLUSTER_NAME \
+            --services $UI_SERVICE_NAME \
+            --no-cli-pager
+
+          echo "🎉 All services deployed successfully!"
+
+      - name: Verify deployment status
+        env:
+          CLUSTER_NAME: ${{ vars.ECS_CLUSTER_NAME || 'ml-cluster' }}
+          API_SERVICE_NAME: ${{ vars.ECS_API_SERVICE_NAME || 'inference-api' }}
+          UI_SERVICE_NAME: ${{ vars.ECS_UI_SERVICE_NAME || 'ui' }}
+        run: |
+          echo "📊 Checking service status..."
+
+          # Get API service status
+          API_STATUS=$(aws ecs describe-services \
+            --cluster $CLUSTER_NAME \
+            --services $API_SERVICE_NAME \
+            --query 'services[0].deployments[0].status' \
+            --output text \
+            --no-cli-pager)
+
+          # Get UI service status
+          UI_STATUS=$(aws ecs describe-services \
+            --cluster $CLUSTER_NAME \
+            --services $UI_SERVICE_NAME \
+            --query 'services[0].deployments[0].status' \
+            --output text \
+            --no-cli-pager)
+
+          echo "API Service Status: $API_STATUS"
+          echo "UI Service Status: $UI_STATUS"
+
+          if [ "$API_STATUS" = "PRIMARY" ] && [ "$UI_STATUS" = "PRIMARY" ]; then
+            echo "✅ Both services are running the latest deployment"
+          else
+            echo "⚠️ Services may still be updating"
+          fi
+
   notify:
-    needs: [data-validation, ml-pipeline, build-and-push]
+    needs: [data-validation, ml-pipeline, build-and-push, deploy-to-ecs]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Pipeline Status
         run: |
-          if [ "${{ needs.ml-pipeline.result }}" == "success" ] && [ "${{ needs.build-and-push.result }}" == "success" ]; then
-            echo "✅ Pipeline completed successfully"
+          if [ "${{ needs.ml-pipeline.result }}" == "success" ] && [ "${{ needs.build-and-push.result }}" == "success" ] && [ "${{ needs.deploy-to-ecs.result }}" == "success" ]; then
+            echo "🎉 Complete MLOps pipeline executed successfully!"
+            echo "✅ Model trained and validated"
+            echo "✅ Docker images built and pushed to ECR"
+            echo "✅ ECS services deployed with latest images"
           else
-            echo "❌ Pipeline failed"
+            echo "❌ Pipeline failed at one or more stages:"
+            echo "  ML Pipeline: ${{ needs.ml-pipeline.result }}"
+            echo "  Build & Push: ${{ needs.build-and-push.result }}"
+            echo "  ECS Deploy: ${{ needs.deploy-to-ecs.result }}"
             exit 1
           fi

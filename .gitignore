@@ -40,8 +40,16 @@ dist/
 # Ignore all .pkl files (models, preprocessors, etc.)
 *.pkl
 
-# Ignore Terraform variables files
-#*.tfvars
+# Ignore Terraform sensitive files
+*.tfvars
+*.tfvars.json
 .terraform/
 .terraform.lock.hcl
-#terraform.tf
+terraform.tfstate
+terraform.tfstate.backup
+*.tfplan
+.terraformrc
+terraform.rc
+
+# Ignore backend setup file (contains sensitive bucket names)
+backend-setup.tf

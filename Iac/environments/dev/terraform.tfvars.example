@@ -1,8 +1,12 @@
+# Terraform Variables Template
+# Copy this file to terraform.tfvars and update with your values
+# DO NOT commit terraform.tfvars to version control!
+
 aws_region     = "eu-west-1"
 project_name   = "house-price-predictor"
 environment    = "dev"
 cluster_name   = "ml-cluster"
-aws_account_id = "495599742316"
+aws_account_id = "YOUR_AWS_ACCOUNT_ID_HERE"
 
 # Network Configuration
 vpc_cidr = "10.0.0.0/16"
