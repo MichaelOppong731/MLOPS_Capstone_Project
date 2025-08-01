@@ -29,6 +29,7 @@ module "route_tables" {
   internet_gateway_id = module.vpc.internet_gateway_id
   public_subnet_ids   = module.subnets.public_subnet_ids
   private_subnet_ids  = module.subnets.private_subnet_ids
+  nat_gateway_id      = null  # No NAT gateway needed
 }
 
 # IAM Roles
@@ -62,11 +63,14 @@ module "ecs_cluster" {
 module "service_discovery" {
   source = "../../modules/service-discovery"
 
-  namespace_name = "${var.project_name}-services"
-  vpc_id         = module.vpc.vpc_id
-  environment    = var.environment
+  namespace   = "${var.project_name}-services"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
 
-  services = ["inference-api", "ui"]
+  services = {
+    "inference-api" = {}
+    "ui"           = {}
+  }
 }
 
 # ALB for UI
@@ -97,10 +101,10 @@ module "inference_api_service" {
   cpu                     = "512"
   memory                  = "1024"
   container_name          = "inference-api"
-  container_image         = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.environment}/inference-api:latest"
+  container_image         = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/house-price-api:latest"
   container_port          = 8000
-  subnets                 = module.subnets.private_subnet_ids
-  assign_public_ip        = false
+  subnets                 = module.subnets.public_subnet_ids
+  assign_public_ip        = true
   security_groups         = [module.security_groups.ecs_tasks_sg_id]
   desired_count           = 1
   environment             = []
@@ -129,7 +133,7 @@ module "ui_service" {
   cpu                     = "256"
   memory                  = "512"
   container_name          = "ui"
-  container_image         = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.environment}/ui:latest"
+  container_image         = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/house-price-ui:latest"
   container_port          = 8501
   subnets                 = module.subnets.public_subnet_ids
   assign_public_ip        = true

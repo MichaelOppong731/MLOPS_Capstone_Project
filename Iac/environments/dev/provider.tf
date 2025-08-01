@@ -7,10 +7,9 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "travel-itenerary-capstone"
-    key          = "dev/terraform.tfstate"
-    region       = "eu-west-1"
-    encrypt      = true
-    use_lockfile = true
+    bucket  = "mlopsnsp"
+    key     = "dev/terraform.tfstate"
+    region  = "eu-west-1"
+    encrypt = true
   }
 }

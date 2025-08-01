@@ -2,7 +2,7 @@ aws_region     = "eu-west-1"
 project_name   = "house-price-predictor"
 environment    = "dev"
 cluster_name   = "ml-cluster"
-aws_account_id = "YOUR_AWS_ACCOUNT_ID"
+aws_account_id = "495599742316"
 
 # Network Configuration
 vpc_cidr = "10.0.0.0/16"

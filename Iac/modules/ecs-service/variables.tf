@@ -129,8 +129,3 @@ variable env {
   type        = string
   default     = "dev"
 }
-
-variable "loki_url" {
-  description = "URL for the Loki logging service"
-  type        = string
-}
