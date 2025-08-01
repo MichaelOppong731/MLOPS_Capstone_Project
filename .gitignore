@@ -40,3 +40,8 @@ dist/
 # Ignore all .pkl files (models, preprocessors, etc.)
 *.pkl
 
+# Ignore Terraform variables files
+#*.tfvars
+.terraform/
+.terraform.lock.hcl
+#terraform.tf
